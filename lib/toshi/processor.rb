@@ -1409,15 +1409,6 @@ module Toshi
       # Maximum target is the minimum difficulty.
       max_target = Bitcoin.network[:proof_of_work_limit]
 
-      # retarget interval in blocks (2016) - how often we change difficulty
-      retarget_interval = Bitcoin.network[:retarget_interval]
-
-      # target interval for 2016 blocks in seconds (1209600) - what is the ideal interval between the blocks
-      retarget_time = Bitcoin.network[:retarget_time]
-
-      # target interval between blocks (10 minutes)
-      target_spacing = Bitcoin.network[:target_spacing]
-
       if block.hash == Bitcoin.network[:genesis_hash]
         return max_target
       end
@@ -1426,6 +1417,20 @@ module Toshi
       prev_height       = @storage.height_for_block_header(prev_block_header)
       prev_time         = prev_block_header.time
       
+      if is_dogecoin? && (prev_height + 1) > Bitcoin.network[:difficulty_change_block]
+        # what is the ideal interval between the blocks
+        retarget_time = Bitcoin.network[:retarget_time_new]
+      else
+        # target interval for 2016 blocks in seconds (1209600) - what is the ideal interval between the blocks
+        retarget_time = Bitcoin.network[:retarget_time]
+      end
+
+      # retarget interval in blocks (2016) - how often we change difficulty
+      retarget_interval = Bitcoin.network[:retarget_interval]
+
+      # target interval between blocks (10 minutes)
+      target_spacing = Bitcoin.network[:target_spacing]
+
       # Dogecoin allows more frequent retargets for its testnet, but only
       # after we fixed it at block 157,500.
       if is_dogecoin?
