@@ -231,13 +231,18 @@ module Toshi
 
     # begin handshake; send +version+ message
     def send_version
-      version = Bitcoin::Protocol::Version.new({
-        :version    => 70001,
+      version_data = {
         :last_block => Toshi::Models::Block.max_height,
         :from       => "127.0.0.1:#{Bitcoin.network[:default_port]}",
         :to         => @host,
         :user_agent => user_agent,
-      })
+      }
+      
+      if Bitcoin.network_name != :dogecoin && Bitcoin.network_name != :dogecoin_testnet
+        version_data.version = 70001
+      end
+      version = Bitcoin::Protocol::Version.new(version_data)
+
       send_data(version.to_pkt)
       log ">> version: #{version.version}, user_agent: #{version.user_agent}" if @debug
     end

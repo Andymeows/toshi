@@ -1425,6 +1425,13 @@ module Toshi
       prev_block_header = @storage.block_header_for_hash(block.prev_block_hex)
       prev_height       = @storage.height_for_block_header(prev_block_header)
       prev_time         = prev_block_header.time
+      
+      # Dogecoin allows more frequent retargets for its testnet
+      #if is_testnet? && is_dogecoin?
+      #  if block.time > (prev_time + (target_spacing*2))
+      #    return max_target
+      #  end
+      #end
 
       # If this is not 2016th block, find the previous block and use its difficulty.
       # Rules are more complex for testnet.
@@ -1455,8 +1462,10 @@ module Toshi
       # Litecoin fixed the time warp attack: https://litecoin.info/Time_warp_attack
       # https://github.com/litecoin-project/litecoin/commit/b1be77210970a6ceb3680412cc3d2f0dd4ca8fb9
       blockstogoback = retarget_interval - 1
-      if Bitcoin.network_name == :litecoin && (prev_height + 1) != retarget_interval
-        blockstogoback = retarget_interval;
+      if Bitcoin.network_name == :litecoin || is_dogecoin?
+        if (prev_height + 1) != retarget_interval
+          blockstogoback = retarget_interval
+        end
       end
 
       first = prev_block_header
@@ -1474,8 +1483,28 @@ module Toshi
       # actual timespan is 2 weeks (retarget_time)
       actual_timespan = prev_block_header.time - first.time
 
-      min = retarget_time / 4
-      max = retarget_time * 4
+      if is_dogecoin?
+        #if (fNewDifficultyProtocol) //DigiShield implementation - thanks to RealSolid & WDC for this code
+        #// amplitude filter - thanks to daft27 for this code
+        #nModulatedTimespan = retargetTimespan + (nModulatedTimespan - retargetTimespan)/8;
+
+        #if (nModulatedTimespan < (retargetTimespan - (retargetTimespan/4)) ) nModulatedTimespan = (retargetTimespan - (retargetTimespan/4));
+        #if (nModulatedTimespan > (retargetTimespan + (retargetTimespan/2)) ) nModulatedTimespan = (retargetTimespan + (retargetTimespan/2));
+        #else
+        if prev_height+1 > 10000
+          min = retarget_time / 4
+          max = retarget_time * 4
+        elsif prev_height+1 > 5000
+          min = retarget_time / 8
+          max = retarget_time * 4
+        else
+          min = retarget_time / 16
+          max = retarget_time * 4
+        end
+      else
+        min = retarget_time / 4
+        max = retarget_time * 4
+      end
 
       actual_timespan = min if actual_timespan < min
       actual_timespan = max if actual_timespan > max
@@ -1518,7 +1547,10 @@ module Toshi
     # Verifies that block hash matches the declared target ("bits")
     # See CheckProofOfWork() in bitcoind.
     def check_proof_of_work(block)
-      if Bitcoin.network_name == :litecoin
+      if is_dogecoin?
+        # TODO: Handle AuxPoW here
+        actual = block.recalc_block_scrypt_hash.to_i(16)
+      elsif Bitcoin.network_name == :litecoin
         actual = block.recalc_block_scrypt_hash.to_i(16)
       else
         actual = block.hash.to_i(16)
@@ -1560,8 +1592,12 @@ module Toshi
       return result
     end
 
+    def is_dogecoin?
+      [:dogecoin, :dogecoin_testnet].include?(Bitcoin.network_name)
+    end
+
     def is_testnet?
-      [:testnet, :testnet3].include?(Bitcoin.network_name)
+      [:testnet, :testnet3, :dogecoin_testnet].include?(Bitcoin.network_name)
     end
 
     def require_standard?
