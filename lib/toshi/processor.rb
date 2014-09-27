@@ -1426,12 +1426,14 @@ module Toshi
       prev_height       = @storage.height_for_block_header(prev_block_header)
       prev_time         = prev_block_header.time
       
-      # Dogecoin allows more frequent retargets for its testnet
-      #if is_testnet? && is_dogecoin?
-      #  if block.time > (prev_time + (target_spacing*2))
-      #    return max_target
-      #  end
-      #end
+      # Dogecoin allows more frequent retargets for its testnet, but only
+      # after we fixed it at block 157,500.
+      if is_dogecoin?
+        # This maps to line 1,308 of main.cpp
+        if is_testnet? && prev_height >= Bitcoin.network[:reset_target_block] && block.time > (prev_time + (target_spacing*2))
+          return max_target
+        end
+      end
 
       # If this is not 2016th block, find the previous block and use its difficulty.
       # Rules are more complex for testnet.
@@ -1484,14 +1486,13 @@ module Toshi
       actual_timespan = prev_block_header.time - first.time
 
       if is_dogecoin?
-        #if (fNewDifficultyProtocol) //DigiShield implementation - thanks to RealSolid & WDC for this code
-        #// amplitude filter - thanks to daft27 for this code
-        #nModulatedTimespan = retargetTimespan + (nModulatedTimespan - retargetTimespan)/8;
-
-        #if (nModulatedTimespan < (retargetTimespan - (retargetTimespan/4)) ) nModulatedTimespan = (retargetTimespan - (retargetTimespan/4));
-        #if (nModulatedTimespan > (retargetTimespan + (retargetTimespan/2)) ) nModulatedTimespan = (retargetTimespan + (retargetTimespan/2));
-        #else
-        if prev_height+1 > 10000
+        if (prev_height + 1) > Bitcoin.network[:difficulty_change_block]
+          # DigiShield implementation - thanks to RealSolid & WDC for this code
+          actual_timespan = retargetTimespan + (actual_timespan - retarget_time)/8;
+          # amplitude filter - thanks to daft27 for this code
+          min = retargetTimespan - (retarget_time/4)
+          max = retargetTimespan + (retarget_time/2)
+        elsif prev_height+1 > 10000
           min = retarget_time / 4
           max = retarget_time * 4
         elsif prev_height+1 > 5000
